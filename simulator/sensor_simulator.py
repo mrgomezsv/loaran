@@ -283,13 +283,14 @@ async def main():
         await simulator.run_test_case(args.case)
     else:
         # Interactive mode
-        print("\nAvailable test cases:")
-        print("1. tank_fill - Tank filling scenario")
-        print("2. false_positive - Debounce test")
-        print("3. correlation - Motion + door correlation")
-        print("4. night_movement - Night movement detection")
-        print("5. random - Random events")
-        print("6. continuous - Continuous monitoring")
+        print("\nCasos de prueba disponibles:")
+        print("1. tank_fill - Escenario de llenado del tanque")
+        print("2. false_positive - Prueba de falsos positivos (rebote)")
+        print("3. correlation - Correlación entre movimiento y puerta")
+        print("4. night_movement - Detección de movimiento nocturno")
+        print("5. random - Eventos aleatorios")
+        print("6. continuous - Monitoreo continuo")
+
         
         choice = input("\nSelect test case (1-6): ").strip()
         

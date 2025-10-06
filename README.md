@@ -219,3 +219,5 @@ Las contribuciones son bienvenidas. Por favor, abre un issue o pull request.
 ---
 
 **Desarrollado para demostración técnica y aprendizaje** 🚀
+
+cd /Users/mrgomez/Desktop/Ejemplo && /Users/mrgomez/Desktop/Ejemplo/venv/bin/python3 /Users/mrgomez/Desktop/Ejemplo/simulate_telegram_alerts.py
