@@ -11,6 +11,7 @@ function App() {
   const [otp, setOtp] = useState('');
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState([]);
+  const [usage, setUsage] = useState(0);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -47,13 +48,28 @@ function App() {
       const res = await axios.post(`/api/v1/auth/confirm-otp?token=${encodeURIComponent(token)}&otp_code=${encodeURIComponent(otp)}`);
       if (res.data?.success) {
         setView('dashboard');
-        // load files
-        const list = await axios.get(`/api/v1/files?token=${encodeURIComponent(token)}`);
-        setFiles(list.data.items || []);
+        // setup carpeta y cargar lista
+        await axios.post(`/api/v1/auth/post-login-setup?token=${encodeURIComponent(token)}`);
+        await loadFiles();
       } else {
         setMessage('OTP inválido');
       }
     } catch (e) { setMessage(e.response?.data?.detail || 'OTP inválido o expirado'); }
+  };
+
+  const loadFiles = async () => {
+    const list = await axios.get(`/api/v1/files?token=${encodeURIComponent(token)}`);
+    setFiles(list.data.items || []);
+    setUsage(list.data.total_size_bytes || 0);
+  };
+
+  const logout = () => {
+    setToken('');
+    setOtp('');
+    setFiles([]);
+    setUsage(0);
+    setForm({ email: '', password: '', full_name: '', telegram_chat_id: '' });
+    setView('login');
   };
 
   return (
@@ -110,34 +126,51 @@ function App() {
         {view === 'dashboard' && (
           <div className="dash">
             <div className="section-title">Dashboard</div>
-          {files.map((f)=> (
-            <div className="dash-item" key={f.id}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div>
-                  <div style={{ fontWeight:600 }}>{f.name}</div>
-                  <div className="muted">{f.algo}</div>
-                </div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button className="button secondary" onClick={async ()=>{
-                    const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
-                    setMessage(`Contenido de ${f.name}:\n` + data.content);
-                  }}>Ver contenido</button>
-                  <button className="button" onClick={async ()=>{
-                    const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
-                    const blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = f.name;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                  }}>Descargar</button>
+            <div className="dash-item" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div className="muted">Uso de carpeta cifrada: {(usage/1024).toFixed(2)} KB</div>
+              <button className="button secondary" onClick={logout}>Cerrar sesión</button>
+            </div>
+            <div className="dash-item" style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <input type="file" onChange={async (e)=>{
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const fd = new FormData();
+                fd.append('file', f);
+                await axios.post(`/api/v1/files/upload?token=${encodeURIComponent(token)}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                setMessage(`Archivo '${f.name}' subido y cifrado correctamente.`);
+                await loadFiles();
+                e.target.value = '';
+              }} />
+              <div className="muted">Los archivos se almacenan cifrados en la carpeta segura.</div>
+            </div>
+            {files.map((f)=> (
+              <div className="dash-item" key={f.id}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div>
+                    <div style={{ fontWeight:600 }}>{f.name}</div>
+                    <div className="muted">{f.algo} · {(f.size_bytes/1024).toFixed(2)} KB</div>
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button className="button secondary" onClick={async ()=>{
+                      const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
+                      setMessage(`Contenido de ${f.name}:\n` + data.content);
+                    }}>Ver contenido</button>
+                    <button className="button" onClick={async ()=>{
+                      const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
+                      const blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = f.name;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      window.URL.revokeObjectURL(url);
+                    }}>Descargar</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
           </div>
         )}
       </div>

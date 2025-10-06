@@ -17,12 +17,15 @@ from app.services.encryption_service import EncryptionService
 from app.core.config import settings
 from app.services.user_service import UserService, DbUserService
 from app.services.file_service import FileService
+from app.services.disk_file_service import DiskFileService
+from fastapi import UploadFile, File
 
 # Create API router
 api_router = APIRouter()
 otp_service = OtpService()
 user_service = UserService()
 file_service = FileService()
+disk_files = DiskFileService(base_path="/Users/mrgomez/Desktop/encrypt")
 
 # Event endpoints
 @api_router.post("/events/lora", response_model=schemas.Event)
@@ -239,6 +242,12 @@ async def login_user(req: schemas.LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     return schemas.LoginResponse(token=token)
 
+@api_router.post("/auth/post-login-setup")
+async def post_login_setup(token: str):
+    # Crear carpeta en disco si no existe
+    disk_files.ensure_base()
+    return {"success": True}
+
 @api_router.post("/auth/request-otp", response_model=schemas.RequestOtpResponse)
 async def auth_request_otp(token: str, db: Session = Depends(get_db)):
     db_users = DbUserService(db)
@@ -273,17 +282,26 @@ async def auth_confirm_otp(token: str, otp_code: str, db: Session = Depends(get_
 async def list_files(token: str, db: Session = Depends(get_db)):
     if not DbUserService(db).is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
-    return {"items": file_service.list_files()}
+    return disk_files.list_files()
 
 @api_router.get("/files/{file_id}")
 async def download_file(file_id: str, token: str, db: Session = Depends(get_db)):
     if not DbUserService(db).is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
     try:
-        data = file_service.get_file_plain(file_id)
+        data = disk_files.load_and_decrypt(file_id)
         return {"file_id": file_id, "content": data.decode("utf-8", errors="replace")}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
+
+@api_router.post("/files/upload")
+async def upload_file(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not DbUserService(db).is_otp_valid(token):
+        raise HTTPException(status_code=401, detail="OTP requerido")
+    content = await file.read()
+    # Guardar cifrado con nombre original
+    disk_files.save_and_encrypt(file.filename, content)
+    return {"success": True}
 
 # Security: critical operations with OTP
 @api_router.post("/security/critical/request", response_model=schemas.CriticalOpInitResponse)
