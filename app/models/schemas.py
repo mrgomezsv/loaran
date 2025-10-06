@@ -154,6 +154,47 @@ class HealthResponse(BaseModel):
     timestamp: datetime
     version: str = "1.0.0"
 
+# Security / Critical Ops schemas
+class CriticalOpRequest(BaseModel):
+    """Request to initiate a critical operation that requires OTP."""
+    op_type: str = Field(..., description="Operation type, e.g., 'download_file'")
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+class CriticalOpInitResponse(BaseModel):
+    """Response after requesting OTP for a critical op."""
+    op_id: str
+    expires_at: datetime
+    message: str
+
+class CriticalOpConfirmRequest(BaseModel):
+    """Confirmation request providing the OTP code to finalize the op."""
+    op_id: str
+    otp_code: str
+
+class CriticalOpResult(BaseModel):
+    """Result of the critical operation after OTP validation."""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+# Auth/User schemas (demo)
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    telegram_chat_id: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginResponse(BaseModel):
+    token: str
+
+class RequestOtpResponse(BaseModel):
+    message: str
+
+
 # Filter rule schemas
 class FilterRuleBase(BaseModel):
     rule_name: str

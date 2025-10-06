@@ -3,7 +3,6 @@ Configuration settings for LoRaGuard application
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
-import os
 
 class Settings(BaseSettings):
     """Application settings"""
@@ -37,6 +36,9 @@ class Settings(BaseSettings):
     # Firebase Cloud Messaging
     FCM_SERVER_KEY: Optional[str] = None
     FCM_PROJECT_ID: Optional[str] = None
+
+    # Encryption master key (base64, 32 bytes)
+    MASTER_KEY_B64: Optional[str] = None
     
     # Redis Configuration
     REDIS_URL: str = "redis://localhost:6379/0"
