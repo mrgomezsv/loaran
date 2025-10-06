@@ -41,7 +41,8 @@ class OtpService:
             raise ValueError("Telegram not configured")
         url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={"chat_id": chat_id, "text": message})
+            resp = await client.post(url, json={"chat_id": chat_id, "text": message})
+            resp.raise_for_status()
 
     async def create_and_send(self, user_id: str, op_id: str, chat_id: str) -> OtpRecord:
         code = self._generate_code()

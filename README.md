@@ -221,3 +221,46 @@ Las contribuciones son bienvenidas. Por favor, abre un issue o pull request.
 **Desarrollado para demostración técnica y aprendizaje** 🚀
 
 cd /Users/mrgomez/Desktop/Ejemplo && /Users/mrgomez/Desktop/Ejemplo/venv/bin/python3 /Users/mrgomez/Desktop/Ejemplo/simulate_telegram_alerts.py
+
+## 🔐 Flujo 3FA (Contraseña + OTP Telegram + Cifrado)
+
+### Variables necesarias
+- En `config.env` define:
+```
+TELEGRAM_BOT_TOKEN=<token_de_tu_bot>
+TELEGRAM_CHAT_ID=<tu_chat_id>
+MASTER_KEY_B64=<clave_base64_de_32_bytes>
+```
+Para generar la clave: `python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"`.
+
+### Backend
+```bash
+cd /Users/mrgomez/Desktop/Ejemplo
+source venv/bin/activate
+python main.py  # expone http://localhost:8000
+```
+
+### Frontend (Dashboard)
+```bash
+cd /Users/mrgomez/Desktop/Ejemplo/dashboard
+npm install
+npm start  # http://localhost:3000 con proxy a la API
+```
+
+### Pasos de uso en la UI
+1. Registro: correo, contraseña, nombre completo y tu Telegram Chat ID.
+2. Login: email + contraseña → la app pedirá OTP.
+3. OTP: pulsa "Enviar OTP a Telegram", ingresa el código recibido y confirma.
+4. Dashboard: verás la lista de archivos sensibles (cifrados en reposo). Puedes ver contenido o descargar `.txt` (descifrado tras OTP).
+
+### Endpoints relevantes
+- `POST /api/v1/auth/register` (registro en SQLite)
+- `POST /api/v1/auth/login` (crea token de sesión persistente)
+- `POST /api/v1/auth/request-otp?token=...` (envía OTP por Telegram)
+- `POST /api/v1/auth/confirm-otp?token=...&otp_code=...` (valida OTP y habilita acceso)
+- `GET /api/v1/files?token=...` (lista archivos)
+- `GET /api/v1/files/{file_id}?token=...` (devuelve contenido descifrado)
+
+Notas:
+- Los archivos se almacenan cifrados con "envelope encryption" (AES-256-GCM) usando `MASTER_KEY_B64`.
+- El token de sesión y el estado de OTP se persisten en SQLite (`session_tokens`).
