@@ -23,6 +23,7 @@ html, body, #root {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  background: #0a0a0a;
 }
 
 body {
@@ -41,7 +42,7 @@ body {
 
 .card {
   width: 100%;
-  max-width: 520px;
+  max-width: 100%;
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius);
@@ -157,17 +158,39 @@ body {
   height: 10px; 
 }
 
+/* LOGIN CONTAINER - ESPECÍFICO PARA LOGIN */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  width: 100%;
+  padding-top: 15vh;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
 /* DASHBOARD LAYOUT - GOOGLE DRIVE STYLE */
 .dashboard-layout {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  top: 20px;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
   overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
 }
 
 /* Top Bar */
