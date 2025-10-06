@@ -1,7 +1,7 @@
 """
 Database models for LoRaGuard application
 """
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, Text, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -110,6 +110,33 @@ class Notification(Base):
     # Relationships
     alert = relationship("Alert", back_populates="notifications")
 
+class User(Base):
+    """User accounts for authentication and Telegram linkage"""
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    telegram_chat_id = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class SessionToken(Base):
+    """Session tokens persisted to avoid loss on reloads"""
+    __tablename__ = "session_tokens"
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_session_token_token"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(255), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    otp_valid = Column(Boolean, default=False)
+    pending_login_op = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 class FilterRule(Base):
     """Filter rules for event processing"""
     __tablename__ = "filter_rules"

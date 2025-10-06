@@ -15,7 +15,7 @@ from app.services.simulation_service import SimulationService
 from app.services.otp_service import OtpService
 from app.services.encryption_service import EncryptionService
 from app.core.config import settings
-from app.services.user_service import UserService
+from app.services.user_service import UserService, DbUserService
 from app.services.file_service import FileService
 
 # Create API router
@@ -226,59 +226,58 @@ async def health_check():
 
 # Auth (demo)
 @api_router.post("/auth/register")
-async def register_user(req: schemas.RegisterRequest):
-    created = user_service.register(req.email, req.password, req.full_name, req.telegram_chat_id)
+async def register_user(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
+    created = DbUserService(db).register(req.email, req.password, req.full_name, req.telegram_chat_id)
     if not created:
         raise HTTPException(status_code=400, detail="Email ya registrado")
     return {"success": True}
 
 @api_router.post("/auth/login", response_model=schemas.LoginResponse)
-async def login_user(req: schemas.LoginRequest):
-    token = user_service.login(req.email, req.password)
+async def login_user(req: schemas.LoginRequest, db: Session = Depends(get_db)):
+    token = DbUserService(db).login(req.email, req.password)
     if not token:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     return schemas.LoginResponse(token=token)
 
 @api_router.post("/auth/request-otp", response_model=schemas.RequestOtpResponse)
-async def auth_request_otp(token: str):
-    user = user_service.get_user_by_token(token)
+async def auth_request_otp(token: str, db: Session = Depends(get_db)):
+    db_users = DbUserService(db)
+    user = db_users.get_user_by_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Token inválido")
     op_id = f"login_{int(datetime.utcnow().timestamp())}"
-    await otp_service.create_and_send(user_id=user.email, op_id=op_id, chat_id=user.telegram_chat_id)
-    # Guardar vínculo simple token->op en memoria del servicio de usuario no implementado; para demo no se necesita.
+    try:
+        await otp_service.create_and_send(user_id=user.email, op_id=op_id, chat_id=user.telegram_chat_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error enviando OTP por Telegram: {e}")
+    db_users.set_pending_login_op(token, op_id)
     return schemas.RequestOtpResponse(message="OTP enviado por Telegram")
 
 @api_router.post("/auth/confirm-otp")
-async def auth_confirm_otp(token: str, otp_code: str):
-    user = user_service.get_user_by_token(token)
+async def auth_confirm_otp(token: str, otp_code: str, db: Session = Depends(get_db)):
+    db_users = DbUserService(db)
+    user = db_users.get_user_by_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Token inválido")
-    # Para demo, reconstruimos el op_id derivado del tiempo es frágil; usaremos comodín: aceptamos cualquier op con user.email
-    # En una implementación real, asociaríamos op_id al token de login.
-    # Probamos una lista de posibles op en memoria: el servicio almacena por (user_id, op_id), aquí no listo; asumimos op_id externo.
-    # Para mantener la demo funcional, pedimos al cliente que pase op_id en query en el mundo real.
-    # Aquí aceptamos "login_*" último usando heurística: intentaremos con el último creado no está accesible, así que pedimos otp sobre op_id igual token.
-    # Solución simple: validar con op_id = token.
-    valid = otp_service.validate_and_consume(user_id=user.email, op_id=f"login_{int(datetime.utcnow().timestamp())}", code=otp_code)
-    # Si falla, intentamos con op_id = token (alternativa demo).
-    if not valid:
-        valid = otp_service.validate_and_consume(user_id=user.email, op_id=token, code=otp_code)
+    op_id = db_users.pop_pending_login_op(token)
+    if not op_id:
+        raise HTTPException(status_code=400, detail="No hay OTP pendiente para este token")
+    valid = otp_service.validate_and_consume(user_id=user.email, op_id=op_id, code=otp_code)
     if not valid:
         raise HTTPException(status_code=401, detail="OTP inválido o expirado")
-    user_service.mark_otp_valid(token)
+    db_users.mark_otp_valid(token)
     return {"success": True}
 
 # Files (require OTP validated session token)
 @api_router.get("/files")
-async def list_files(token: str):
-    if not user_service.is_otp_valid(token):
+async def list_files(token: str, db: Session = Depends(get_db)):
+    if not DbUserService(db).is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
     return {"items": file_service.list_files()}
 
 @api_router.get("/files/{file_id}")
-async def download_file(file_id: str, token: str):
-    if not user_service.is_otp_valid(token):
+async def download_file(file_id: str, token: str, db: Session = Depends(get_db)):
+    if not DbUserService(db).is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
     try:
         data = file_service.get_file_plain(file_id)
