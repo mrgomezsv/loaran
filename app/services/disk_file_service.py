@@ -63,4 +63,16 @@ class DiskFileService:
             wrapped_key = f.read()
         return EncryptionService.decrypt_bytes(enc_data, wrapped_key)
 
+    def delete_file(self, name: str) -> bool:
+        enc_path = self._enc_path(name)
+        key_path = self._key_path(name)
+        existed = False
+        if os.path.exists(enc_path):
+            os.remove(enc_path)
+            existed = True
+        if os.path.exists(key_path):
+            os.remove(key_path)
+            existed = True or existed
+        return existed
+
 

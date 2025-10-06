@@ -12,6 +12,9 @@ function App() {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState([]);
   const [usage, setUsage] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [uploadPct, setUploadPct] = useState(0);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -58,9 +61,10 @@ function App() {
   };
 
   const loadFiles = async () => {
-    const list = await axios.get(`/api/v1/files?token=${encodeURIComponent(token)}`);
+    const list = await axios.get(`/api/v1/files?token=${encodeURIComponent(token)}&page=${page}&size=10`);
     setFiles(list.data.items || []);
     setUsage(list.data.total_size_bytes || 0);
+    setPages(list.data.pages || 1);
   };
 
   const logout = () => {
@@ -136,12 +140,19 @@ function App() {
                 if (!f) return;
                 const fd = new FormData();
                 fd.append('file', f);
-                await axios.post(`/api/v1/files/upload?token=${encodeURIComponent(token)}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await axios.post(`/api/v1/files/upload?token=${encodeURIComponent(token)}`, fd, {
+                  headers: { 'Content-Type': 'multipart/form-data' },
+                  onUploadProgress: (evt)=>{
+                    if (!evt.total) return;
+                    setUploadPct(Math.round((evt.loaded * 100) / evt.total));
+                  }
+                });
                 setMessage(`Archivo '${f.name}' subido y cifrado correctamente.`);
                 await loadFiles();
                 e.target.value = '';
+                setUploadPct(0);
               }} />
-              <div className="muted">Los archivos se almacenan cifrados en la carpeta segura.</div>
+              <div className="muted">{uploadPct ? `Subiendo: ${uploadPct}%` : 'Los archivos se almacenan cifrados en la carpeta segura.'}</div>
             </div>
             {files.map((f)=> (
               <div className="dash-item" key={f.id}>
@@ -151,6 +162,11 @@ function App() {
                     <div className="muted">{f.algo} · {(f.size_bytes/1024).toFixed(2)} KB</div>
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
+                    <button className="button secondary" onClick={async ()=>{
+                      if (!confirm(`Eliminar '${f.name}'?`)) return;
+                      await axios.delete(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
+                      await loadFiles();
+                    }}>Eliminar</button>
                     <button className="button secondary" onClick={async ()=>{
                       const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
                       setMessage(`Contenido de ${f.name}:\n` + data.content);
@@ -171,6 +187,11 @@ function App() {
                 </div>
               </div>
             ))}
+            <div className="dash-item" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <button className="button secondary" disabled={page<=1} onClick={async ()=>{ setPage(p=>p-1); setTimeout(loadFiles, 0); }}>Anterior</button>
+              <div className="muted">Página {page} de {pages}</div>
+              <button className="button secondary" disabled={page>=pages} onClick={async ()=>{ setPage(p=>p+1); setTimeout(loadFiles, 0); }}>Siguiente</button>
+            </div>
           </div>
         )}
       </div>

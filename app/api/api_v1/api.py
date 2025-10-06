@@ -279,10 +279,21 @@ async def auth_confirm_otp(token: str, otp_code: str, db: Session = Depends(get_
 
 # Files (require OTP validated session token)
 @api_router.get("/files")
-async def list_files(token: str, db: Session = Depends(get_db)):
+async def list_files(token: str, db: Session = Depends(get_db), page: int = 1, size: int = 50):
     if not DbUserService(db).is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
-    return disk_files.list_files()
+    data = disk_files.list_files()
+    items = data["items"]
+    start = (page - 1) * size
+    end = start + size
+    return {
+        "items": items[start:end],
+        "total_size_bytes": data["total_size_bytes"],
+        "page": page,
+        "size": size,
+        "total": len(items),
+        "pages": (len(items) + size - 1) // size
+    }
 
 @api_router.get("/files/{file_id}")
 async def download_file(file_id: str, token: str, db: Session = Depends(get_db)):
@@ -301,6 +312,15 @@ async def upload_file(token: str, file: UploadFile = File(...), db: Session = De
     content = await file.read()
     # Guardar cifrado con nombre original
     disk_files.save_and_encrypt(file.filename, content)
+    return {"success": True}
+
+@api_router.delete("/files/{file_id}")
+async def delete_file(file_id: str, token: str, db: Session = Depends(get_db)):
+    if not DbUserService(db).is_otp_valid(token):
+        raise HTTPException(status_code=401, detail="OTP requerido")
+    ok = disk_files.delete_file(file_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return {"success": True}
 
 # Security: critical operations with OTP
