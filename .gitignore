@@ -1,5 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+**/__pycache__/
+*/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -332,3 +334,4 @@ temp/
 # Local development files
 local/
 dev/
+venv/
