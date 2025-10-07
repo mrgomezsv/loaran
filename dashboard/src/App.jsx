@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, googleProvider } from './firebaseConfig';
 import './styles.css';
 
@@ -18,6 +18,27 @@ function App() {
   const [pages, setPages] = useState(1);
   const [uploadPct, setUploadPct] = useState(0);
   const [googleIdToken, setGoogleIdToken] = useState(''); // Para guardar el token de Google temporalmente
+
+  // Manejar el resultado del redirect de Google
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          // Usuario autenticado con Google
+          const idToken = await result.user.getIdToken();
+          setGoogleIdToken(idToken);
+          setView('telegram_id');
+          setMessage('Autenticación con Google exitosa. Ingresa tu Telegram Chat ID.');
+        }
+      } catch (error) {
+        console.error('Error en redirect de Google:', error);
+        setMessage(error.message || 'Error con autenticación de Google');
+      }
+    };
+
+    handleRedirectResult();
+  }, []);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
