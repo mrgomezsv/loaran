@@ -3,14 +3,24 @@ Servicio de autenticación con Firebase Authentication (Google OAuth)
 """
 from __future__ import annotations
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
-from google.oauth2 import id_token
-from google.auth.transport import requests
+import firebase_admin
+from firebase_admin import auth as firebase_auth
+from firebase_admin import credentials
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Inicializar Firebase Admin SDK (solo una vez)
+try:
+    firebase_admin.get_app()
+except ValueError:
+    # Si no existe una app, inicializar sin credenciales
+    # (funciona para validar tokens sin necesidad de service account)
+    cred = credentials.ApplicationDefault() if settings.GOOGLE_CLIENT_ID else None
+    firebase_admin.initialize_app(cred)
 
 
 class GoogleAuthService:
@@ -22,7 +32,7 @@ class GoogleAuthService:
         Valida un ID Token de Firebase y retorna la información del usuario.
         
         Firebase Authentication emite tokens JWT que pueden validarse
-        usando las bibliotecas de Google Auth.
+        usando Firebase Admin SDK.
         
         Args:
             token: ID Token JWT recibido desde el frontend (Firebase)
@@ -42,44 +52,16 @@ class GoogleAuthService:
             raise ValueError("GOOGLE_CLIENT_ID (Firebase Project ID) no configurado en el servidor")
         
         try:
-            # Para Firebase, el token debe verificarse SIN especificar audience primero
-            # y luego validar manualmente el audience contra el Project ID
-            try:
-                # Intentar sin audience (para tokens de Firebase)
-                idinfo = id_token.verify_oauth2_token(
-                    token,
-                    requests.Request()
-                )
-            except ValueError:
-                # Si falla, intentar con el Project ID como audience
-                idinfo = id_token.verify_oauth2_token(
-                    token,
-                    requests.Request(),
-                    settings.GOOGLE_CLIENT_ID
-                )
-            
-            # Verificar que el token viene de Firebase
-            # Los tokens de Firebase tienen el formato: https://securetoken.google.com/<project-id>
-            expected_issuer = f"https://securetoken.google.com/{settings.GOOGLE_CLIENT_ID}"
-            
-            # Aceptar tanto tokens de Firebase como tokens directos de Google (para compatibilidad)
-            valid_issuers = [
-                expected_issuer,
-                'accounts.google.com',
-                'https://accounts.google.com'
-            ]
-            
-            if idinfo['iss'] not in valid_issuers:
-                logger.warning(f"Token con issuer no válido: {idinfo['iss']}")
-                raise ValueError(f'Token no válido. Issuer esperado: {expected_issuer}')
+            # Verificar el token usando Firebase Admin SDK
+            decoded_token = firebase_auth.verify_id_token(token)
             
             # Extraer información del usuario
             user_info = {
-                'google_id': idinfo.get('sub') or idinfo.get('user_id'),  # uid de Firebase
-                'email': idinfo.get('email'),
-                'name': idinfo.get('name', 'Usuario de Google'),
-                'avatar': idinfo.get('picture'),
-                'email_verified': idinfo.get('email_verified', False)
+                'google_id': decoded_token.get('uid') or decoded_token.get('sub'),
+                'email': decoded_token.get('email'),
+                'name': decoded_token.get('name', 'Usuario de Google'),
+                'avatar': decoded_token.get('picture'),
+                'email_verified': decoded_token.get('email_verified', False)
             }
             
             # Validar que al menos tengamos email y google_id
@@ -88,13 +70,22 @@ class GoogleAuthService:
             if not user_info['google_id']:
                 raise ValueError('Token no contiene identificador único')
             
-            logger.info(f"Token de Firebase validado para: {user_info['email']} (issuer: {idinfo['iss']})")
+            logger.info("Token de Firebase validado para: %s", user_info['email'])
             return user_info
             
-        except ValueError as e:
-            logger.warning(f"Token inválido: {str(e)}")
-            raise ValueError(f"Token inválido: {str(e)}")
+        except firebase_auth.ExpiredIdTokenError as e:
+            logger.warning("Token de Firebase expirado: %s", str(e))
+            raise ValueError(f"Token expirado: {str(e)}") from e
+        except firebase_auth.RevokedIdTokenError as e:
+            logger.warning("Token de Firebase revocado: %s", str(e))
+            raise ValueError(f"Token revocado: {str(e)}") from e
+        except firebase_auth.CertificateFetchError as e:
+            logger.error("Error al obtener certificados de Firebase: %s", str(e))
+            raise ValueError(f"Error de certificados: {str(e)}") from e
+        except firebase_auth.InvalidIdTokenError as e:
+            logger.warning("Token de Firebase inválido: %s", str(e))
+            raise ValueError(f"Token inválido: {str(e)}") from e
         except Exception as e:
-            logger.error(f"Error al verificar token: {str(e)}")
-            raise ValueError(f"Error al verificar token: {str(e)}")
+            logger.error("Error al verificar token: %s", str(e))
+            raise ValueError(f"Error al verificar token: {str(e)}") from e
 

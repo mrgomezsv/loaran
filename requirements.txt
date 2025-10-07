@@ -29,3 +29,4 @@ twilio==8.10.0
 
 # Optional: For Firebase Cloud Messaging
 firebase-admin==6.4.0
+firebase-admin>=6.4.0
