@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.models import schemas
+from app.models import schemas, models
 from app.services.event_service import EventService
 from app.services.alert_service import AlertService
 from app.services.device_service import DeviceService
