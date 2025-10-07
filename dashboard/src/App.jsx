@@ -133,6 +133,16 @@ function App() {
     }
 
     try {
+      // Debug: Verificar que el token existe
+      console.log('Token de Google disponible:', !!googleIdToken);
+      console.log('Longitud del token:', googleIdToken ? googleIdToken.length : 0);
+      
+      if (!googleIdToken) {
+        setMessage('Error: No se encontró el token de Google. Por favor intenta de nuevo.');
+        setView('login');
+        return;
+      }
+
       // Enviar token de Firebase al backend con el Telegram Chat ID
       const { data } = await axios.post('/api/v1/auth/google/login', {
         id_token: googleIdToken,
@@ -144,6 +154,7 @@ function App() {
       setMessage('Configuración completa. Ahora solicita el OTP.');
     } catch (e) {
       console.error('Error completando setup:', e);
+      console.error('Detalle del error:', e.response?.data);
       setMessage(e.response?.data?.detail || 'Error al completar la configuración');
     }
   };

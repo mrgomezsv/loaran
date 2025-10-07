@@ -42,13 +42,21 @@ class GoogleAuthService:
             raise ValueError("GOOGLE_CLIENT_ID (Firebase Project ID) no configurado en el servidor")
         
         try:
-            # Verificar el token de Firebase
-            # Firebase Project ID se usa como audience
-            idinfo = id_token.verify_oauth2_token(
-                token,
-                requests.Request(),
-                settings.GOOGLE_CLIENT_ID  # Este es el Firebase Project ID
-            )
+            # Para Firebase, el token debe verificarse SIN especificar audience primero
+            # y luego validar manualmente el audience contra el Project ID
+            try:
+                # Intentar sin audience (para tokens de Firebase)
+                idinfo = id_token.verify_oauth2_token(
+                    token,
+                    requests.Request()
+                )
+            except ValueError:
+                # Si falla, intentar con el Project ID como audience
+                idinfo = id_token.verify_oauth2_token(
+                    token,
+                    requests.Request(),
+                    settings.GOOGLE_CLIENT_ID
+                )
             
             # Verificar que el token viene de Firebase
             # Los tokens de Firebase tienen el formato: https://securetoken.google.com/<project-id>
