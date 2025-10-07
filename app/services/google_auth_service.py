@@ -3,24 +3,27 @@ Servicio de autenticación con Firebase Authentication (Google OAuth)
 """
 from __future__ import annotations
 import logging
+import os
 from typing import Dict
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth
-from firebase_admin import credentials
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Configurar PROJECT_ID para Firebase Admin SDK
+if settings.GOOGLE_CLIENT_ID:
+    os.environ['GOOGLE_CLOUD_PROJECT'] = settings.GOOGLE_CLIENT_ID
+    os.environ['GCLOUD_PROJECT'] = settings.GOOGLE_CLIENT_ID
+
 # Inicializar Firebase Admin SDK (solo una vez)
 try:
     firebase_admin.get_app()
 except ValueError:
-    # Si no existe una app, inicializar sin credenciales
-    # (funciona para validar tokens sin necesidad de service account)
-    cred = credentials.ApplicationDefault() if settings.GOOGLE_CLIENT_ID else None
-    firebase_admin.initialize_app(cred)
+    # Inicializar sin credenciales (solo para validación de tokens)
+    firebase_admin.initialize_app()
 
 
 class GoogleAuthService:
