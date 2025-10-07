@@ -17,6 +17,7 @@ function App() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [uploadPct, setUploadPct] = useState(0);
+  const [googleIdToken, setGoogleIdToken] = useState(''); // Para guardar el token de Google temporalmente
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -93,28 +94,36 @@ function App() {
       // 2. Obtener el ID Token de Firebase
       const idToken = await result.user.getIdToken();
 
-      // 3. Si es el primer login, solicitar telegram_chat_id
-      let telegramChatId = form.telegram_chat_id;
-      if (!telegramChatId) {
-        telegramChatId = window.prompt('Ingresa tu Telegram Chat ID para recibir notificaciones:');
-        if (!telegramChatId) {
-          setMessage('Telegram Chat ID es requerido');
-          return;
-        }
-      }
+      // 3. Guardar el token y mostrar pantalla para Telegram Chat ID
+      setGoogleIdToken(idToken);
+      setView('telegram_id');
+      setMessage('Autenticación con Google exitosa. Ingresa tu Telegram Chat ID.');
+    } catch (e) {
+      console.error('Error en Google login:', e);
+      setMessage(e.response?.data?.detail || e.message || 'Error con autenticación de Google');
+    }
+  };
 
-      // 4. Enviar token de Firebase al backend
+  const completeTelegramSetup = async () => {
+    setMessage('');
+    if (!form.telegram_chat_id) {
+      setMessage('Por favor ingresa tu Telegram Chat ID');
+      return;
+    }
+
+    try {
+      // Enviar token de Firebase al backend con el Telegram Chat ID
       const { data } = await axios.post('/api/v1/auth/google/login', {
-        id_token: idToken,
-        telegram_chat_id: telegramChatId
+        id_token: googleIdToken,
+        telegram_chat_id: form.telegram_chat_id
       });
 
       setToken(data.token);
       setView('otp');
-      setMessage('Login con Google exitoso. Solicita el OTP.');
+      setMessage('Configuración completa. Ahora solicita el OTP.');
     } catch (e) {
-      console.error('Error en Google login:', e);
-      setMessage(e.response?.data?.detail || e.message || 'Error con autenticación de Google');
+      console.error('Error completando setup:', e);
+      setMessage(e.response?.data?.detail || 'Error al completar la configuración');
     }
   };
 
@@ -178,6 +187,33 @@ function App() {
                     </svg>
                     Continuar con Google
                   </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'telegram_id' && (
+          <div className="login-container">
+            <div className="login-card">
+              <div className="stack">
+                <div className="section-title">Configuración de Telegram</div>
+                <p style={{ color: '#9ca3af', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                  Para recibir notificaciones de seguridad y códigos OTP, necesitamos tu Telegram Chat ID.
+                </p>
+                <input 
+                  className="input" 
+                  name="telegram_chat_id"
+                  placeholder="Telegram Chat ID (ej: 5858877153)" 
+                  value={form.telegram_chat_id} 
+                  onChange={onChange}
+                />
+                <p style={{ color: '#6b7280', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                  💡 Para obtener tu Chat ID, habla con <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1' }}>@userinfobot</a> en Telegram
+                </p>
+                <div className="row" style={{ marginTop: '1.5rem' }}>
+                  <button className="button secondary" onClick={() => setView('login')}>Cancelar</button>
+                  <button className="button" onClick={completeTelegramSetup}>Continuar</button>
+                </div>
               </div>
             </div>
           </div>

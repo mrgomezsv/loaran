@@ -4,15 +4,16 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// TODO: Reemplazar con tu configuración de Firebase
-// La encontrarás en: Firebase Console → Project Settings → General → Your apps
+// Configuración de Firebase para LoRaWan-TecWave
+// Obtenida de: Firebase Console → Project Settings → General → Your apps
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto-id",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+  apiKey: "AIzaSyC9-XdDg1n-mYvASFOuwC8LUjcGo2_MxSI",
+  authDomain: "lorawan-tecwave.firebaseapp.com",
+  projectId: "lorawan-tecwave",
+  storageBucket: "lorawan-tecwave.firebasestorage.app",
+  messagingSenderId: "402218569115",
+  appId: "1:402218569115:web:6d7dff86186d2fd287a53e",
+  measurementId: "G-M4EBXVNHHS"
 };
 
 // Inicializar Firebase
