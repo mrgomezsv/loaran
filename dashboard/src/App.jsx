@@ -134,8 +134,8 @@ function App() {
 
     try {
       // Debug: Verificar que el token existe
-      console.log('Token de Google disponible:', !!googleIdToken);
-      console.log('Longitud del token:', googleIdToken ? googleIdToken.length : 0);
+      // console.log('Token de Google disponible:', !!googleIdToken);
+      // console.log('Longitud del token:', googleIdToken ? googleIdToken.length : 0);
       
       if (!googleIdToken) {
         setMessage('Error: No se encontró el token de Google. Por favor intenta de nuevo.');
@@ -303,21 +303,21 @@ function App() {
                     <span>Mis archivos</span>
                   </div>
                   <div className="sidebar-item">
-                    <div className="sidebar-icon">⭐</div>
-                    <span>Destacados</span>
+                    {/* <div className="sidebar-icon">⭐</div>
+                    <span>Destacados</span> */}
                   </div>
                   <div className="sidebar-item">
-                    <div className="sidebar-icon">🕒</div>
-                    <span>Recientes</span>
+                    {/* <div className="sidebar-icon">🕒</div>
+                    <span>Recientes</span> */}
                   </div>
                 </div>
-                <div className="sidebar-section">
+                {/* <div className="sidebar-section">
                   <div className="sidebar-title">Almacenamiento</div>
                   <div className="sidebar-item">
                     <div className="sidebar-icon">💾</div>
                     <span>Almacenamiento usado</span>
                   </div>
-                </div>
+                </div> */}
               </div>
 
               {/* File Area */}
