@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Encryption master key (base64, 32 bytes)
     MASTER_KEY_B64: Optional[str] = None
     
+    # Google OAuth
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    
     # Redis Configuration
     REDIS_URL: str = "redis://localhost:6379/0"
     

@@ -5,6 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.models import schemas
@@ -19,7 +22,9 @@ from app.services.user_service import UserService, DbUserService
 from app.services.file_service import FileService
 from app.services.disk_file_service import DiskFileService
 from app.services.audit_service import AuditService, AuditEventType
+from app.services.google_auth_service import GoogleAuthService
 from fastapi import UploadFile, File
+import secrets
 
 # Create API router
 api_router = APIRouter()
@@ -348,6 +353,92 @@ async def logout_user(token: str, db: Session = Depends(get_db)):
     
     # Invalidar el token en DB (opcional: podrías eliminar el SessionToken)
     return {"success": True, "message": "Sesión cerrada"}
+
+@api_router.post("/auth/google/login", response_model=schemas.LoginResponse)
+async def google_login(req: schemas.GoogleLoginRequest, db: Session = Depends(get_db)):
+    """Login o registro con Google OAuth 2.0"""
+    audit = AuditService(db)
+    
+    try:
+        # 1. Validar el token de Google
+        google_user = GoogleAuthService.verify_google_token(req.id_token)
+        
+        # 2. Buscar usuario por google_id o email
+        user = db.query(models.User).filter(
+            (models.User.google_id == google_user['google_id']) |
+            (models.User.email == google_user['email'])
+        ).first()
+        
+        if not user:
+            # 3. Usuario nuevo - Crear cuenta automáticamente
+            # Verificar que tengamos telegram_chat_id
+            if not req.telegram_chat_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="telegram_chat_id requerido para nuevos usuarios"
+                )
+            
+            user = models.User(
+                google_id=google_user['google_id'],
+                email=google_user['email'],
+                full_name=google_user['name'],
+                avatar_url=google_user['avatar'],
+                auth_provider='google',
+                email_verified=google_user['email_verified'],
+                telegram_chat_id=req.telegram_chat_id,
+                password_hash=None  # No password para usuarios de Google
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            
+            # Auditoría: Registro con Google
+            await audit.log_and_notify(
+                event_type=AuditEventType.REGISTER,
+                user_email=user.email,
+                details={"provider": "google", "google_id": google_user['google_id']},
+                severity="info"
+            )
+        else:
+            # 4. Usuario existente - actualizar info de Google si no estaba vinculado
+            if not user.google_id and user.email == google_user['email']:
+                # Vincular Google a cuenta existente
+                user.google_id = google_user['google_id']
+                user.avatar_url = google_user['avatar']
+                user.auth_provider = 'google'
+                user.email_verified = google_user['email_verified']
+                db.commit()
+        
+        # 5. Crear sesión
+        token = secrets.token_urlsafe(24)
+        sess = models.SessionToken(token=token, user_id=user.id, otp_valid=False)
+        db.add(sess)
+        db.commit()
+        
+        # 6. Auditoría: Login exitoso con Google
+        await audit.log_and_notify(
+            event_type=AuditEventType.LOGIN_SUCCESS,
+            user_email=user.email,
+            details={"provider": "google"},
+            severity="info"
+        )
+        
+        return schemas.LoginResponse(token=token)
+        
+    except ValueError as e:
+        # Token de Google inválido
+        await audit.log_and_notify(
+            event_type=AuditEventType.LOGIN_FAILED,
+            user_email="google_auth_attempt",
+            details={"provider": "google", "error": str(e)},
+            severity="critical"
+        )
+        raise HTTPException(status_code=401, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en Google login: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 # Files (require OTP validated session token)
 @api_router.get("/files")

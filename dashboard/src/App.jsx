@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from './firebaseConfig';
 import './styles.css';
 
 function App() {
@@ -82,6 +84,40 @@ function App() {
     setView('login');
   };
 
+  const handleGoogleLogin = async () => {
+    setMessage('');
+    try {
+      // 1. Autenticar con Firebase
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // 2. Obtener el ID Token de Firebase
+      const idToken = await result.user.getIdToken();
+
+      // 3. Si es el primer login, solicitar telegram_chat_id
+      let telegramChatId = form.telegram_chat_id;
+      if (!telegramChatId) {
+        telegramChatId = window.prompt('Ingresa tu Telegram Chat ID para recibir notificaciones:');
+        if (!telegramChatId) {
+          setMessage('Telegram Chat ID es requerido');
+          return;
+        }
+      }
+
+      // 4. Enviar token de Firebase al backend
+      const { data } = await axios.post('/api/v1/auth/google/login', {
+        id_token: idToken,
+        telegram_chat_id: telegramChatId
+      });
+
+      setToken(data.token);
+      setView('otp');
+      setMessage('Login con Google exitoso. Solicita el OTP.');
+    } catch (e) {
+      console.error('Error en Google login:', e);
+      setMessage(e.response?.data?.detail || e.message || 'Error con autenticación de Google');
+    }
+  };
+
   return (
     <div className="container">
       <div className="card">
@@ -124,6 +160,24 @@ function App() {
                   <button className="button secondary" onClick={() => setView('register')}>Crear cuenta</button>
                   <button className="button" onClick={login}>Entrar</button>
                 </div>
+                
+                  {/* Divider */}
+                  <div className="divider-container">
+                    <div className="divider-line"></div>
+                    <span className="divider-text">O</span>
+                    <div className="divider-line"></div>
+                  </div>
+                  
+                  {/* Google Sign-In Button con Firebase */}
+                  <button className="google-button" onClick={handleGoogleLogin}>
+                    <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+                      <path d="M9.003 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.96v2.332C2.44 15.983 5.485 18 9.003 18z" fill="#34A853"/>
+                      <path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                      <path d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.426 0 9.003 0 5.485 0 2.44 2.017.96 4.958L3.967 7.29c.708-2.127 2.692-3.71 5.036-3.71z" fill="#EA4335"/>
+                    </svg>
+                    Continuar con Google
+                  </button>
               </div>
             </div>
           </div>

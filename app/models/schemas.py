@@ -194,6 +194,11 @@ class LoginResponse(BaseModel):
 class RequestOtpResponse(BaseModel):
     message: str
 
+class GoogleLoginRequest(BaseModel):
+    """Request para login con Google OAuth"""
+    id_token: str = Field(..., description="ID Token JWT de Google")
+    telegram_chat_id: Optional[str] = Field(None, description="Telegram Chat ID (requerido para nuevos usuarios)")
+
 
 # Filter rule schemas
 class FilterRuleBase(BaseModel):
