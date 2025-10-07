@@ -67,7 +67,13 @@ function App() {
     setPages(list.data.pages || 1);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      // Llamar endpoint de logout para auditoría
+      await axios.post(`/api/v1/auth/logout?token=${encodeURIComponent(token)}`);
+    } catch (e) {
+      console.error('Error en logout:', e);
+    }
     setToken('');
     setOtp('');
     setFiles([]);
@@ -249,11 +255,11 @@ function App() {
                       <div className="file-meta">{f.algo} · {(f.size_bytes/1024).toFixed(2)} KB</div>
                       <div className="file-actions">
                         <button className="file-action-btn" onClick={async ()=>{
-                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
+                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=view`);
                           setMessage(`Contenido de ${f.name}:\n` + data.content);
                         }}>👁️</button>
                         <button className="file-action-btn" onClick={async ()=>{
-                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}`);
+                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=download`);
                           const blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' });
                           const url = window.URL.createObjectURL(blob);
                           const a = document.createElement('a');

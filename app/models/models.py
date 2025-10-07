@@ -149,3 +149,15 @@ class FilterRule(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class AuditLog(Base):
+    """Audit log for security events and file operations"""
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(100), nullable=False, index=True)
+    user_email = Column(String(255), nullable=True, index=True)
+    details = Column(Text, nullable=True)  # JSON string with additional details
+    severity = Column(String(20), nullable=False, default="info")  # info, warning, critical
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

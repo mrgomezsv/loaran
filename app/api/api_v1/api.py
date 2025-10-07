@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.services.user_service import UserService, DbUserService
 from app.services.file_service import FileService
 from app.services.disk_file_service import DiskFileService
+from app.services.audit_service import AuditService, AuditEventType
 from fastapi import UploadFile, File
 
 # Create API router
@@ -233,17 +234,44 @@ async def register_user(req: schemas.RegisterRequest, db: Session = Depends(get_
     created = DbUserService(db).register(req.email, req.password, req.full_name, req.telegram_chat_id)
     if not created:
         raise HTTPException(status_code=400, detail="Email ya registrado")
+    
+    # Auditoría: Nuevo registro
+    audit = AuditService(db)
+    await audit.log_and_notify(
+        event_type=AuditEventType.REGISTER,
+        user_email=req.email,
+        severity="info"
+    )
+    
     return {"success": True}
 
 @api_router.post("/auth/login", response_model=schemas.LoginResponse)
 async def login_user(req: schemas.LoginRequest, db: Session = Depends(get_db)):
+    audit = AuditService(db)
     token = DbUserService(db).login(req.email, req.password)
+    
     if not token:
+        # Auditoría: Login fallido
+        await audit.log_and_notify(
+            event_type=AuditEventType.LOGIN_FAILED,
+            user_email=req.email,
+            severity="critical"
+        )
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    
+    # Auditoría: Login exitoso
+    await audit.log_and_notify(
+        event_type=AuditEventType.LOGIN_SUCCESS,
+        user_email=req.email,
+        severity="info"
+    )
+    
     return schemas.LoginResponse(token=token)
 
 @api_router.post("/auth/post-login-setup")
-async def post_login_setup(token: str):
+async def post_login_setup(token: str, db: Session = Depends(get_db)):
+    # Validar token (opcional)
+    _ = token  # Token usado para validación en frontend
     # Crear carpeta en disco si no existe
     disk_files.ensure_base()
     return {"success": True}
@@ -260,11 +288,21 @@ async def auth_request_otp(token: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error enviando OTP por Telegram: {e}")
     db_users.set_pending_login_op(token, op_id)
+    
+    # Auditoría: Solicitud de OTP
+    audit = AuditService(db)
+    await audit.log_and_notify(
+        event_type=AuditEventType.OTP_REQUEST,
+        user_email=user.email,
+        severity="info"
+    )
+    
     return schemas.RequestOtpResponse(message="OTP enviado por Telegram")
 
 @api_router.post("/auth/confirm-otp")
 async def auth_confirm_otp(token: str, otp_code: str, db: Session = Depends(get_db)):
     db_users = DbUserService(db)
+    audit = AuditService(db)
     user = db_users.get_user_by_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Token inválido")
@@ -272,10 +310,44 @@ async def auth_confirm_otp(token: str, otp_code: str, db: Session = Depends(get_
     if not op_id:
         raise HTTPException(status_code=400, detail="No hay OTP pendiente para este token")
     valid = otp_service.validate_and_consume(user_id=user.email, op_id=op_id, code=otp_code)
+    
     if not valid:
+        # Auditoría: OTP fallido
+        await audit.log_and_notify(
+            event_type=AuditEventType.OTP_CONFIRM_FAILED,
+            user_email=user.email,
+            severity="critical"
+        )
         raise HTTPException(status_code=401, detail="OTP inválido o expirado")
+    
     db_users.mark_otp_valid(token)
+    
+    # Auditoría: OTP confirmado exitosamente
+    await audit.log_and_notify(
+        event_type=AuditEventType.OTP_CONFIRM_SUCCESS,
+        user_email=user.email,
+        severity="info"
+    )
+    
     return {"success": True}
+
+@api_router.post("/auth/logout")
+async def logout_user(token: str, db: Session = Depends(get_db)):
+    """Cerrar sesión del usuario"""
+    db_users = DbUserService(db)
+    user = db_users.get_user_by_token(token)
+    
+    if user:
+        # Auditoría: Logout
+        audit = AuditService(db)
+        await audit.log_and_notify(
+            event_type=AuditEventType.LOGOUT,
+            user_email=user.email,
+            severity="info"
+        )
+    
+    # Invalidar el token en DB (opcional: podrías eliminar el SessionToken)
+    return {"success": True, "message": "Sesión cerrada"}
 
 # Files (require OTP validated session token)
 @api_router.get("/files")
@@ -296,31 +368,86 @@ async def list_files(token: str, db: Session = Depends(get_db), page: int = 1, s
     }
 
 @api_router.get("/files/{file_id}")
-async def download_file(file_id: str, token: str, db: Session = Depends(get_db)):
-    if not DbUserService(db).is_otp_valid(token):
+async def download_file(file_id: str, token: str, action: str = "download", db: Session = Depends(get_db)):
+    """
+    Descargar o visualizar archivo
+    action: 'download' o 'view'
+    """
+    db_users = DbUserService(db)
+    if not db_users.is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
+    
+    user = db_users.get_user_by_token(token)
+    audit = AuditService(db)
+    
     try:
         data = disk_files.load_and_decrypt(file_id)
+        
+        # Auditoría según la acción
+        if action == "view":
+            await audit.log_and_notify(
+                event_type=AuditEventType.FILE_VIEW,
+                user_email=user.email if user else None,
+                details={"file_name": file_id},
+                severity="info"
+            )
+        else:  # download
+            await audit.log_and_notify(
+                event_type=AuditEventType.FILE_DOWNLOAD,
+                user_email=user.email if user else None,
+                details={"file_name": file_id},
+                severity="warning"
+            )
+        
         return {"file_id": file_id, "content": data.decode("utf-8", errors="replace")}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
 
 @api_router.post("/files/upload")
 async def upload_file(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    if not DbUserService(db).is_otp_valid(token):
+    db_users = DbUserService(db)
+    if not db_users.is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
+    
+    user = db_users.get_user_by_token(token)
     content = await file.read()
+    file_size = len(content)
+    
     # Guardar cifrado con nombre original
     disk_files.save_and_encrypt(file.filename, content)
+    
+    # Auditoría: Archivo subido
+    audit = AuditService(db)
+    await audit.log_and_notify(
+        event_type=AuditEventType.FILE_UPLOAD,
+        user_email=user.email if user else None,
+        details={"file_name": file.filename, "file_size": file_size},
+        severity="info"
+    )
+    
     return {"success": True}
 
 @api_router.delete("/files/{file_id}")
 async def delete_file(file_id: str, token: str, db: Session = Depends(get_db)):
-    if not DbUserService(db).is_otp_valid(token):
+    db_users = DbUserService(db)
+    if not db_users.is_otp_valid(token):
         raise HTTPException(status_code=401, detail="OTP requerido")
+    
+    user = db_users.get_user_by_token(token)
     ok = disk_files.delete_file(file_id)
+    
     if not ok:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    
+    # Auditoría: Archivo eliminado
+    audit = AuditService(db)
+    await audit.log_and_notify(
+        event_type=AuditEventType.FILE_DELETE,
+        user_email=user.email if user else None,
+        details={"file_name": file_id},
+        severity="critical"
+    )
+    
     return {"success": True}
 
 # Security: critical operations with OTP
