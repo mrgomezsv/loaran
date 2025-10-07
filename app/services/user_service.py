@@ -101,6 +101,9 @@ class DbUserService:
         user = self.db.query(models.User).filter(models.User.email == email).first()
         if not user:
             return None
+        # Si el usuario fue creado con Google, no tiene password_hash
+        if user.password_hash is None:
+            return None  # Usuario de Google debe usar Google login
         if not _verify_password(password, user.password_hash):
             return None
         token = secrets.token_urlsafe(24)
