@@ -264,3 +264,6 @@ npm start  # http://localhost:3000 con proxy a la API
 Notas:
 - Los archivos se almacenan cifrados con "envelope encryption" (AES-256-GCM) usando `MASTER_KEY_B64`.
 - El token de sesión y el estado de OTP se persisten en SQLite (`session_tokens`).
+
+cd /Users/mrgomez/Desktop/Ejemplo && source venv/bin/activate && python main.py
+cd /Users/mrgomez/Desktop/Ejemplo/dashboard && npm start

@@ -490,7 +490,24 @@ async def download_file(file_id: str, token: str, action: str = "download", db: 
                 severity="warning"
             )
         
-        return {"file_id": file_id, "content": data.decode("utf-8", errors="replace")}
+        # Determinar si es archivo de texto o binario
+        try:
+            # Intentar decodificar como UTF-8
+            text_content = data.decode("utf-8")
+            file_type = "text"
+            content = text_content
+        except UnicodeDecodeError:
+            # Es archivo binario, codificar en Base64
+            import base64
+            file_type = "binary"
+            content = base64.b64encode(data).decode("utf-8")
+        
+        return {
+            "file_id": file_id, 
+            "content": content,
+            "type": file_type,
+            "size": len(data)
+        }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
 

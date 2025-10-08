@@ -165,7 +165,7 @@ function App() {
         <div className="brand">
           <div className="brand-badge">LG</div>
           <div>
-            <div style={{ fontWeight: 700 }}>LoRaGuard</div>
+            <div style={{ fontWeight: 700 }}>LoRaWan by Tec Wave</div>
             <div className="subtitle mt-2">Seguridad IoT con 3FA y cifrado</div>
           </div>
         </div>
@@ -274,7 +274,7 @@ function App() {
               <div className="top-bar-left">
                 <div className="logo">
                   <div className="brand-badge">📁</div>
-                  <span>LoRaGuard</span>
+                  <span>LoRaWan by Tec Wave</span>
                 </div>
                 <input 
                   type="text" 
@@ -377,20 +377,48 @@ function App() {
                       <div className="file-meta">{f.algo} · {(f.size_bytes/1024).toFixed(2)} KB</div>
                       <div className="file-actions">
                         <button className="file-action-btn" onClick={async ()=>{
-                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=view`);
-                          setMessage(`Contenido de ${f.name}:\n` + data.content);
+                          try {
+                            const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=view`);
+                            if (data.type === 'text') {
+                              setMessage(`Contenido de ${f.name}:\n` + data.content);
+                            } else {
+                              setMessage(`Archivo binario: ${f.name} (${(data.size / 1024).toFixed(2)} KB)\nEste archivo no se puede mostrar como texto.`);
+                            }
+                          } catch (error) {
+                            setMessage('Error al cargar el archivo: ' + error.message);
+                          }
                         }}>👁️</button>
                         <button className="file-action-btn" onClick={async ()=>{
-                          const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=download`);
-                          const blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' });
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = f.name;
-                          document.body.appendChild(a);
-                          a.click();
-                          a.remove();
-                          window.URL.revokeObjectURL(url);
+                          try {
+                            const { data } = await axios.get(`/api/v1/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(token)}&action=download`);
+                            let blob;
+                            let mimeType = 'application/octet-stream';
+                            
+                            if (data.type === 'text') {
+                              // Archivo de texto
+                              blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' });
+                              mimeType = 'text/plain';
+                            } else {
+                              // Archivo binario - decodificar Base64
+                              const binaryString = atob(data.content);
+                              const bytes = new Uint8Array(binaryString.length);
+                              for (let i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                              }
+                              blob = new Blob([bytes], { type: mimeType });
+                            }
+                            
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = f.name;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                          } catch (error) {
+                            setMessage('Error al descargar el archivo: ' + error.message);
+                          }
                         }}>⬇️</button>
                         <button className="file-action-btn danger" onClick={async ()=>{
                           if (!window.confirm(`Eliminar '${f.name}'?`)) return;
